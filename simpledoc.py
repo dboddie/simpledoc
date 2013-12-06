@@ -24,8 +24,7 @@ class Writer:
     HTML file.
     """
     
-    Order = {ast.Module: [(ast.Import, "Imports"),
-                          (ast.ClassDef, "Classes"),
+    Order = {ast.Module: [(ast.ClassDef, "Classes"),
                           (ast.FunctionDef, "Functions")],
              ast.ClassDef: [(ast.FunctionDef, "Methods")]}
     
@@ -36,8 +35,16 @@ class Writer:
         self.f = f
         self.name = name
         self.encoding = encoding
+        
+        # Keep track of which HTML elements have been started.
         self.elements = []
+        
+        # Compile an index of words to help with cross-referencing.
         self.index = {}
+        
+        # Maintain a context stack to allow references to be as close as
+        # possible to the context in which they are used.
+        self.context = []
         
         self.begin("html", "\n")
         
@@ -99,6 +106,10 @@ class Writer:
     
         self.f.write(self.h(text))
     
+    def create_ref(self, obj):
+    
+        return "-".join(map(lambda x: x.name, self.context + [obj]))
+    
     def is_documented(self, obj):
     
         if obj.__class__ in Writer.CheckDocstring:
@@ -142,10 +153,27 @@ class Writer:
                     self.w(piece[start + len(word):])
                 
                 elif word in self.index and word != obj.name:
+                
                     # Match tokens in the index.
-                    self.begin("a", attributes = {"href": "#"+self.index[word]})
-                    self.w(piece)
-                    self.end("a")
+                    candidates = self.index[word]
+                    
+                    if len(candidates) == 1:
+                        ref = candidates.values()[0]
+                    else:
+                        # Find the match in the closest context to this one.
+                        for level in self.context[::-1]:
+                            try:
+                                ref = candidates[level]
+                                break
+                            except KeyError:
+                                pass
+                    
+                    if ref:
+                        self.begin("a", attributes = {"href": "#" + ref})
+                        self.w(piece)
+                        self.end("a")
+                    else:
+                        self.w(piece)
                 else:
                     # Just write the word as plain text.
                     self.w(piece)
@@ -158,6 +186,10 @@ class Writer:
     
     def write_body(self, obj, heading, show_others = False):
     
+        # Add the object to the context.
+        if hasattr(obj, "name"):
+            self.context.append(obj)
+        
         # Collect top-level objects into separate groups.
         objects = {}
         
@@ -165,7 +197,8 @@ class Writer:
             objects.setdefault(child.__class__, []).append(child)
             try:
                 if self.is_documented(child):
-                    self.index[child.name] = child.name
+                    self.index.setdefault(child.name, {})
+                    self.index[child.name][obj] = self.create_ref(child)
             except AttributeError:
                 pass
         
@@ -193,6 +226,10 @@ class Writer:
             
             for objects in remaining:
                 self.write(objects)
+        
+        # Remove the object from the context.
+        if hasattr(obj, "name"):
+            self.context.pop()
     
     def handleModule(self, obj):
     
@@ -215,7 +252,8 @@ class Writer:
     def handleClassDef(self, obj):
     
         self.begin('div class="class"')
-        self.begin("h3", attributes = {"id": obj.name, "class": "class-heading"})
+        self.begin("h3", attributes = {"id": self.create_ref(obj),
+                                       "class": "class-heading"})
         self.w(obj.name)
         self.end("h3", "\n\n")
         
@@ -227,7 +265,8 @@ class Writer:
     def handleFunctionDef(self, obj):
     
         self.begin('div class="function"')
-        self.begin("h3", attributes = {"id": obj.name, "class": "function-heading"})
+        self.begin("h3", attributes = {"id": self.create_ref(obj),
+                                       "class": "function-heading"})
         self.w(obj.name)
         self.w("(")
         
