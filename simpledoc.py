@@ -18,6 +18,83 @@
 
 import ast, os, sys
 
+class Index:
+
+    """Compiles an index of objects that can be referenced in docstrings.
+    """
+    
+    def __init__(self, module_name):
+    
+        # Compile a dictionary of references.
+        self.refs = {}
+        self.name = module_name
+        
+        # Maintain a context stack to allow references to be as close as
+        # possible to the context in which they are used.
+        self.context = []
+    
+    def is_documented(self, obj):
+    
+        if obj.__class__ in Writer.CheckDocstring:
+            return ast.get_docstring(obj)
+        else:
+            return True
+    
+    def create_ref(self, obj):
+    
+        return "-".join(map(lambda x: x.name, self.context + [obj]))
+    
+    def process(self, objects):
+    
+        for obj in objects:
+        
+            # Do not visit certain types of object if they are undocumented.
+            if not self.is_documented(obj):
+                continue
+            
+            handler = Index.Handlers.get(obj.__class__)
+            if handler:
+                handler(self, obj)
+    
+    def add_ref(self, obj):
+    
+        try:
+            self.refs.setdefault(obj.name, {})
+            if self.context:
+                parent = self.context[-1]
+            else:
+                parent = None
+            self.refs[obj.name][parent] = self.create_ref(obj)
+        except AttributeError:
+            pass
+    
+    def process_body(self, obj):
+    
+        self.context.append(obj)
+        self.process(obj.body)
+        self.context.pop()
+    
+    def handleModule(self, obj):
+    
+        obj.name = self.name
+        self.add_ref(obj)
+        self.process_body(obj)
+    
+    def handleClassDef(self, obj):
+    
+        self.add_ref(obj)
+        self.process_body(obj)
+    
+    def handleFunctionDef(self, obj):
+    
+        self.add_ref(obj)
+        self.process_body(obj)
+    
+    Handlers = {ast.Module: handleModule,
+                ast.ClassDef: handleClassDef,
+                ast.FunctionDef: handleFunctionDef}
+
+
 class Writer:
 
     """Writes the structure and documentation of Python source code to an
@@ -30,17 +107,15 @@ class Writer:
     
     CheckDocstring = set([ast.ClassDef, ast.FunctionDef])
     
-    def __init__(self, f, name, encoding = "utf8"):
+    def __init__(self, f, module_name, index, encoding = "utf8"):
     
         self.f = f
-        self.name = name
+        self.name = module_name
+        self.index = index
         self.encoding = encoding
         
         # Keep track of which HTML elements have been started.
         self.elements = []
-        
-        # Compile an index of words to help with cross-referencing.
-        self.index = {}
         
         # Maintain a context stack to allow references to be as close as
         # possible to the context in which they are used.
@@ -50,7 +125,7 @@ class Writer:
         
         self.begin("head", "\n")
         self.begin("title")
-        self.w(name)
+        self.w(module_name)
         self.end("title", "\n")
         self.begin('style type="text/css"', "\n")
         self.w(".doc { text-align: justify }\n")
@@ -108,7 +183,29 @@ class Writer:
     
     def create_ref(self, obj):
     
-        return "-".join(map(lambda x: x.name, self.context + [obj]))
+        return self.index.refs[obj.name][self.context[-1]]
+    
+    def get_ref(self, name):
+    
+        try:
+            candidates = self.index.refs[name]
+        except KeyError:
+            return ""
+        
+        if len(candidates) == 1:
+            ref = candidates.values()[0]
+        else:
+            # Find the match in the closest context to this one.
+            for level in self.context[::-1]:
+                try:
+                    ref = candidates[level]
+                    break
+                except KeyError:
+                    pass
+            else:
+                ref = ""
+        
+        return ref
     
     def is_documented(self, obj):
     
@@ -133,56 +230,61 @@ class Writer:
     
         doc = ast.get_docstring(obj)
         if doc:
-            self.begin('p class="doc"', "\n")
+            lines = map(lambda line: line.rstrip(), doc.split("\n"))
+            paragraphs = []
+            para = []
             
-            words = doc.split()
-            for i in range(len(words)):
-            
-                piece = words[i]
-                
-                # Match argument names, if specified.
-                # Remove trailing punctuation.
-                word = piece.rstrip(",.;:()")
-                
-                if word in names:
-                    start = piece.index(word)
-                    self.w(piece[:start])
-                    self.begin("em")
-                    self.w(word)
-                    self.end("em")
-                    self.w(piece[start + len(word):])
-                
-                elif word in self.index and word != obj.name:
-                
-                    # Match tokens in the index.
-                    candidates = self.index[word]
-                    
-                    if len(candidates) == 1:
-                        ref = candidates.values()[0]
-                    else:
-                        # Find the match in the closest context to this one.
-                        for level in self.context[::-1]:
-                            try:
-                                ref = candidates[level]
-                                break
-                            except KeyError:
-                                pass
-                    
-                    if ref:
-                        self.begin("a", attributes = {"href": "#" + ref})
-                        self.w(piece)
-                        self.end("a")
-                    else:
-                        self.w(piece)
+            for line in lines:
+                if line:
+                    para.append(line)
                 else:
-                    # Just write the word as plain text.
-                    self.w(piece)
-                
-                # Add spaces between the words.
-                if i < len(words) - 1:
-                    self.w(" ")
+                    paragraphs.append(" ".join(para))
+                    para = []
             
-            self.end("p", spacing = "\n\n")
+            if para:
+                paragraphs.append(" ".join(para))
+            
+            for para in paragraphs:
+            
+                self.begin('p class="doc"', "\n")
+                
+                words = para.split()
+                for i in range(len(words)):
+                
+                    piece = words[i]
+                    
+                    # Match argument names, if specified.
+                    # Remove trailing punctuation.
+                    word = piece.rstrip(",.;:()")
+                    
+                    if word in names:
+                        start = piece.index(word)
+                        self.w(piece[:start])
+                        self.begin("em")
+                        self.w(word)
+                        self.end("em")
+                        self.w(piece[start + len(word):])
+                    
+                    elif word in self.index.refs and word != obj.name:
+                    
+                        # Match tokens in the index.
+                        ref = self.get_ref(word)
+                        
+                        if ref:
+                            self.begin("a", attributes = {"href": "#" + ref})
+                            self.w(piece)
+                            self.end("a")
+                        else:
+                            self.w(piece)
+                    else:
+                        # Just write the word as plain text.
+                        self.w(piece)
+                    
+                    # Add spaces between the words.
+                    if i < len(words) - 1:
+                        self.w(" ")
+                
+                self.end("p", spacing = "\n\n")
     
     def write_body(self, obj, heading, show_others = False):
     
@@ -194,13 +296,8 @@ class Writer:
         objects = {}
         
         for child in obj.body:
-            objects.setdefault(child.__class__, []).append(child)
-            try:
-                if self.is_documented(child):
-                    self.index.setdefault(child.name, {})
-                    self.index[child.name][obj] = self.create_ref(child)
-            except AttributeError:
-                pass
+            if self.is_documented(child):
+                objects.setdefault(child.__class__, []).append(child)
         
         # Write a section for each group in the intended order.
         for type, category in Writer.Order[obj.__class__]:
@@ -237,7 +334,8 @@ class Writer:
         self.w(self.name)
         self.end("h1", "\n\n")
         
-        self.index = {}
+        self.write_docstring(obj)
+        
         self.write_body(obj, "h2")
     
     def handleImport(self, obj):
@@ -255,6 +353,26 @@ class Writer:
         self.begin("h3", attributes = {"id": self.create_ref(obj),
                                        "class": "class-heading"})
         self.w(obj.name)
+        
+        if obj.bases:
+        
+            bases = []
+            for base in obj.bases:
+                ref = self.get_ref(base.id)
+                if ref:
+                    bases.append((base.id, ref))
+            
+            if bases:
+                self.w("(")
+                for name, ref in bases:
+                    self.begin("a", attributes = {"href": "#" + ref})
+                    self.w(name)
+                    self.end("a")
+                    
+                    if ref != bases[-1][1]:
+                        self.w(", ")
+                
+                self.w(")")
         self.end("h3", "\n\n")
         
         self.write_docstring(obj)
@@ -324,9 +442,15 @@ def process(path):
     
     file_name = os.path.split(path)[1]
     output_path = file_name + ".html"
+    tree = [ast.parse(source, path)]
+    module_name = os.path.splitext(file_name)[0]
     
-    w = Writer(open(output_path, "wb"), os.path.splitext(file_name)[0])
-    w.write([ast.parse(source, path)])
+    # Compile an index of words to help with cross-referencing.
+    index = Index(module_name)
+    index.process(tree)
+    
+    w = Writer(open(output_path, "wb"), module_name, index)
+    w.write(tree)
     w.close()
 
 if __name__ == "__main__":
