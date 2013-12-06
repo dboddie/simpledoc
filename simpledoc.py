@@ -42,7 +42,7 @@ class Index:
     
     def create_ref(self, obj):
     
-        return "-".join(map(lambda x: x.name, self.context + [obj]))
+        return map(lambda x: x.name, self.context + [obj])
     
     def process(self, objects):
     
@@ -154,7 +154,7 @@ class Writer:
         if attributes:
             self.w(" ")
         for name, value in attributes.items():
-            self.w(name + '="' + str(value) + '"')
+            self.w(name + '="' + str(value) + '" ')
         self.f.write(">")
         self.f.write(spacing)
         
@@ -183,7 +183,7 @@ class Writer:
     
     def create_ref(self, obj):
     
-        return self.index.refs[obj.name][self.context[-1]]
+        return "-".join(self.index.refs[obj.name][self.context[-1]][1:])
     
     def get_ref(self, name):
     
@@ -205,7 +205,10 @@ class Writer:
             else:
                 ref = ""
         
-        return ref
+        href = ref[0] + ".html"
+        if len(ref) > 1:
+            href += "#" + "-".join(ref[1:])
+        return href
     
     def is_documented(self, obj):
     
@@ -271,7 +274,7 @@ class Writer:
                         ref = self.get_ref(word)
                         
                         if ref:
-                            self.begin("a", attributes = {"href": "#" + ref})
+                            self.begin("a", attributes = {"href": ref})
                             self.w(piece)
                             self.end("a")
                         else:
@@ -365,7 +368,7 @@ class Writer:
             if bases:
                 self.w("(")
                 for name, ref in bases:
-                    self.begin("a", attributes = {"href": "#" + ref})
+                    self.begin("a", attributes = {"href": ref})
                     self.w(name)
                     self.end("a")
                     
@@ -441,9 +444,9 @@ def process(path):
     source = open(path, "rb").read()
     
     file_name = os.path.split(path)[1]
-    output_path = file_name + ".html"
-    tree = [ast.parse(source, path)]
     module_name = os.path.splitext(file_name)[0]
+    output_path = module_name + ".html"
+    tree = [ast.parse(source, path)]
     
     # Compile an index of words to help with cross-referencing.
     index = Index(module_name)
