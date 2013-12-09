@@ -145,7 +145,7 @@ class Writer:
                           (ast.FunctionDef, "Functions")],
              ast.ClassDef: [(ast.FunctionDef, "Methods")]}
     
-    CheckDocstring = set([ast.ClassDef, ast.FunctionDef])
+    CheckDocstring = set([ast.Module, ast.ClassDef, ast.FunctionDef])
     
     Module_Template = (
         "<head>\n"
@@ -294,6 +294,9 @@ class Writer:
     
     def write_module(self, module):
     
+        if not self.is_documented(module.objects[0]):
+            return
+        
         name = ".".join(map(lambda x: x.name, self.context + [module]))
         self.open(name)
         self.write_objects(module.objects)
