@@ -20,12 +20,18 @@ import ast, glob, os, sys
 
 class Module:
 
+    """Represents a module file containing AST objects obtained by using the
+    ast module's parser."""
+    
     def __init__(self, name, objects):
     
         self.name = name
         self.objects = objects
 
 class Package:
+
+    """Represents a package directory containing modules and other package
+    directories."""
 
     def __init__(self, name, objects):
     
@@ -52,10 +58,6 @@ class Index:
             return ast.get_docstring(obj)
         else:
             return True
-    
-    def create_ref(self, obj):
-    
-        return self.context[:] + [obj]
     
     def read(self, obj):
     
@@ -104,7 +106,7 @@ class Index:
         except AttributeError:
             pass
         
-        self.refs[obj.name][parent] = self.create_ref(obj)
+        self.refs[obj.name][parent] = self.context[:] + [obj]
     
     def process_body(self, obj):
     
@@ -145,6 +147,23 @@ class Writer:
     
     CheckDocstring = set([ast.ClassDef, ast.FunctionDef])
     
+    Module_Template = (
+        "<head>\n"
+        "<title>%(title)s</title>\n"
+        '<style type="text/css">\n'
+        "  .doc { text-align: justify }\n"
+        "  .class { border-left: solid 4px #d0d0ff;\n"
+        "           background-color: #f7f7f7;\n"
+        "           padding-left: 0.5em }\n"
+        "  .class-heading { background-color: #d0e0ff; padding: 2px }\n"
+        "  .function { border-left: solid 4px #d0dfff;\n"
+        "              padding-left: 0.5em }\n"
+        "  .function-heading { font-family: monospace }\n"
+        "</style>\n"
+        '<meta http-equiv="Content-Type" content="text/html; charset=%(encoding)s" />\n'
+        "</head>\n\n"
+        )
+    
     def __init__(self, index, encoding = "utf8"):
     
         self.index = index
@@ -165,23 +184,9 @@ class Writer:
         self.f = open(output_path, "wb")
         
         self.begin("html", "\n")
-        self.begin("head", "\n")
-        self.begin("title")
-        self.w(self.name)
-        self.end("title", "\n")
-        self.begin('style type="text/css"', "\n")
-        self.w(".doc { text-align: justify }\n")
-        self.w(".class { border-left: solid 4px #d0d0ff;\n"
-               "         background-color: #f7f7f7;\n"
-               "         padding-left: 0.5em }\n")
-        self.w(".class-heading { background-color: #d0e0ff; padding: 2px }\n")
-        self.w(".function { border-left: solid 4px #d0dfff;\n"
-               "            padding-left: 0.5em }\n")
-        self.w(".function-heading { font-family: monospace }\n")
-        self.end(spacing = "\n")
-        self.f.write('<meta http-equiv="Content-Type" content="text/html; charset=%s" />\n' % self.encoding)
-        self.end("head", "\n\n")
         
+        self.f.write(Writer.Module_Template % {"title": self.h(name),
+                                               "encoding": self.encoding})
         self.begin("body", "\n")
     
     def close(self):
