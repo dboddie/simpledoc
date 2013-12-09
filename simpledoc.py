@@ -343,7 +343,7 @@ class Writer:
             
             for para in paragraphs:
             
-                self.begin('p class="doc"', "\n")
+                self.begin('p', attributes = {"class": "doc"}, spacing = "\n")
                 
                 words = para.split()
                 for i in range(len(words)):
@@ -446,7 +446,7 @@ class Writer:
     
     def handleClassDef(self, obj):
     
-        self.begin('div class="class"')
+        self.begin('div', attributes = {"class": "class"})
         self.begin("h3", attributes = {"id": self.create_ref(obj),
                                        "class": "class-heading"})
         self.w(obj.name)
@@ -573,7 +573,7 @@ def process(paths):
 if __name__ == "__main__":
 
     if len(sys.argv) < 2:
-        sys.stderr.write("Usage: %s <Python file> ...\n" % sys.argv[0])
+        sys.stderr.write("Usage: %s <Python module file or package directory> ...\n" % sys.argv[0])
         sys.exit(1)
     
     process(sys.argv[1:])
