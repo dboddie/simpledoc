@@ -457,7 +457,6 @@ def process(paths):
         
         file_name = os.path.split(path)[1]
         module_name = os.path.splitext(file_name)[0]
-        output_path = module_name + ".html"
         
         objects = [ast.parse(source, path)]
         trees.append((module_name, objects))
@@ -466,7 +465,8 @@ def process(paths):
     
     for path, (module_name, objects) in zip(paths, trees):
     
-        print "Writing", path
+        output_path = module_name + ".html"
+        print "Writing", output_path
         
         w = Writer(open(output_path, "wb"), module_name, index)
         w.write(objects)
