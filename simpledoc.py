@@ -23,11 +23,10 @@ class Index:
     """Compiles an index of objects that can be referenced in docstrings.
     """
     
-    def __init__(self, module_name):
+    def __init__(self):
     
         # Compile a dictionary of references.
         self.refs = {}
-        self.name = module_name
         
         # Maintain a context stack to allow references to be as close as
         # possible to the context in which they are used.
@@ -43,6 +42,11 @@ class Index:
     def create_ref(self, obj):
     
         return map(lambda x: x.name, self.context + [obj])
+    
+    def read_module(self, module_name, objects):
+    
+        self.name = module_name
+        self.process(objects)
     
     def process(self, objects):
     
@@ -439,22 +443,34 @@ class Writer:
                 ast.Name: handleName,
                 ast.Attribute: handleAttribute}
 
-def process(path):
+def process(paths):
 
-    source = open(path, "rb").read()
-    
-    file_name = os.path.split(path)[1]
-    module_name = os.path.splitext(file_name)[0]
-    output_path = module_name + ".html"
-    tree = [ast.parse(source, path)]
+    trees = []
     
     # Compile an index of words to help with cross-referencing.
-    index = Index(module_name)
-    index.process(tree)
+    index = Index()
     
-    w = Writer(open(output_path, "wb"), module_name, index)
-    w.write(tree)
-    w.close()
+    for path in paths:
+    
+        print "Reading", path
+        source = open(path, "rb").read()
+        
+        file_name = os.path.split(path)[1]
+        module_name = os.path.splitext(file_name)[0]
+        output_path = module_name + ".html"
+        
+        objects = [ast.parse(source, path)]
+        trees.append((module_name, objects))
+        
+        index.read_module(module_name, objects)
+    
+    for path, (module_name, objects) in zip(paths, trees):
+    
+        print "Writing", path
+        
+        w = Writer(open(output_path, "wb"), module_name, index)
+        w.write(objects)
+        w.close()
 
 if __name__ == "__main__":
 
@@ -462,7 +478,6 @@ if __name__ == "__main__":
         sys.stderr.write("Usage: %s <Python file> ...\n" % sys.argv[0])
         sys.exit(1)
     
-    for path in sys.argv[1:]:
-        process(path)
+    process(sys.argv[1:])
     
     sys.exit()
