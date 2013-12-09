@@ -16,7 +16,21 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-import ast, os, sys
+import ast, glob, os, sys
+
+class Module:
+
+    def __init__(self, name, objects):
+    
+        self.name = name
+        self.objects = objects
+
+class Package:
+
+    def __init__(self, name, objects):
+    
+        self.name = name
+        self.objects = objects
 
 class Index:
 
@@ -41,12 +55,30 @@ class Index:
     
     def create_ref(self, obj):
     
-        return map(lambda x: x.name, self.context + [obj])
+        return self.context[:] + [obj]
     
-    def read_module(self, module_name, objects):
+    def read(self, obj):
     
-        self.name = module_name
-        self.process(objects)
+        if isinstance(obj, Module):
+            self.read_module(obj)
+        elif isinstance(obj, Package):
+            self.read_package(obj)
+    
+    def read_module(self, module):
+    
+        self.name = module.name
+        self.process(module.objects)
+    
+    def read_package(self, package):
+    
+        # Append the Package object to the context because this has a name
+        # attribute that various methods need.
+        self.context.append(package)
+        
+        for obj in package.objects:
+            self.read(obj)
+        
+        self.context.pop()
     
     def process(self, objects):
     
@@ -68,9 +100,11 @@ class Index:
                 parent = self.context[-1]
             else:
                 parent = None
-            self.refs[obj.name][parent] = self.create_ref(obj)
+        
         except AttributeError:
             pass
+        
+        self.refs[obj.name][parent] = self.create_ref(obj)
     
     def process_body(self, obj):
     
@@ -111,10 +145,8 @@ class Writer:
     
     CheckDocstring = set([ast.ClassDef, ast.FunctionDef])
     
-    def __init__(self, f, module_name, index, encoding = "utf8"):
+    def __init__(self, index, encoding = "utf8"):
     
-        self.f = f
-        self.name = module_name
         self.index = index
         self.encoding = encoding
         
@@ -124,12 +156,18 @@ class Writer:
         # Maintain a context stack to allow references to be as close as
         # possible to the context in which they are used.
         self.context = []
+    
+    def open(self, name):
+    
+        self.name = name
+        output_path = name + ".html"
+        print "Writing", output_path
+        self.f = open(output_path, "wb")
         
         self.begin("html", "\n")
-        
         self.begin("head", "\n")
         self.begin("title")
-        self.w(module_name)
+        self.w(self.name)
         self.end("title", "\n")
         self.begin('style type="text/css"', "\n")
         self.w(".doc { text-align: justify }\n")
@@ -141,7 +179,7 @@ class Writer:
                "            padding-left: 0.5em }\n")
         self.w(".function-heading { font-family: monospace }\n")
         self.end(spacing = "\n")
-        self.f.write('<meta http-equiv="Content-Type" content="text/html; charset=%s" />\n' % encoding)
+        self.f.write('<meta http-equiv="Content-Type" content="text/html; charset=%s" />\n' % self.encoding)
         self.end("head", "\n\n")
         
         self.begin("body", "\n")
@@ -187,7 +225,11 @@ class Writer:
     
     def create_ref(self, obj):
     
-        return "-".join(self.index.refs[obj.name][self.context[-1]][1:])
+        """Returns the internal reference for the object specified by obj."""
+        
+        pieces = self.index.refs[obj.name][self.context[-1]]
+        
+        return self.encode_ref(pieces)[1]
     
     def get_ref(self, name):
     
@@ -207,12 +249,29 @@ class Writer:
                 except KeyError:
                     pass
             else:
-                ref = ""
+                return ""
         
-        href = ref[0] + ".html"
-        if len(ref) > 1:
-            href += "#" + "-".join(ref[1:])
-        return href
+        href, ref = self.encode_ref(ref)
+        if href:
+            if ref:
+                return href + ".html#" + ref
+            else:
+                return href + ".html"
+        else:
+            return "#" + ref
+    
+    def encode_ref(self, pieces):
+    
+        path = []
+        ref = []
+        
+        for piece in pieces:
+            if isinstance(piece, Package) or isinstance(piece, ast.Module):
+                path.append(piece.name)
+            else:
+                ref.append(piece.name)
+        
+        return ".".join(path), "-".join(ref)
     
     def is_documented(self, obj):
     
@@ -221,7 +280,30 @@ class Writer:
         else:
             return True
     
-    def write(self, objects):
+    def write(self, obj):
+    
+        if isinstance(obj, Module):
+            self.write_module(obj)
+        elif isinstance(obj, Package):
+            self.write_package(obj)
+    
+    def write_module(self, module):
+    
+        name = ".".join(map(lambda x: x.name, self.context + [module]))
+        self.open(name)
+        self.write_objects(module.objects)
+        self.close()
+    
+    def write_package(self, package):
+    
+        self.context.append(package)
+        
+        for obj in package.objects:
+            self.write(obj)
+        
+        self.context.pop()
+    
+    def write_objects(self, objects):
     
         for obj in objects:
         
@@ -315,7 +397,7 @@ class Writer:
                 self.w(category)
                 self.end(end_heading, "\n\n")
                 
-                self.write(objects[type])
+                self.write_objects(objects[type])
                 # Remove the objects from the dictionary.
                 del objects[type]
         
@@ -329,7 +411,7 @@ class Writer:
             remaining.sort()
             
             for objects in remaining:
-                self.write(objects)
+                self.write_objects(objects)
         
         # Remove the object from the context.
         if hasattr(obj, "name"):
@@ -406,7 +488,7 @@ class Writer:
             
             if i >= default_start:
                 self.w(" = ")
-                self.write([obj.args.defaults[i - default_start]])
+                self.write_objects([obj.args.defaults[i - default_start]])
             if name != obj.args.args[-1]:
                 self.w(", ")
         
@@ -415,7 +497,7 @@ class Writer:
         
         self.write_docstring(obj, arg_names)
         
-        self.write(obj.body)
+        self.write_objects(obj.body)
         self.end("div", "\n\n")
     
     def handleNum(self, obj):
@@ -432,7 +514,7 @@ class Writer:
     
     def handleAttribute(self, obj):
     
-        self.write([obj.value])
+        self.write_objects([obj.value])
     
     Handlers = {ast.Module: handleModule,
                 ast.Import: handleImport,
@@ -443,34 +525,42 @@ class Writer:
                 ast.Name: handleName,
                 ast.Attribute: handleAttribute}
 
-def process(paths):
+def find_modules(paths):
 
     trees = []
     
-    # Compile an index of words to help with cross-referencing.
-    index = Index()
-    
     for path in paths:
     
-        print "Reading", path
-        source = open(path, "rb").read()
-        
         file_name = os.path.split(path)[1]
         module_name = os.path.splitext(file_name)[0]
         
-        objects = [ast.parse(source, path)]
-        trees.append((module_name, objects))
-        
-        index.read_module(module_name, objects)
+        if os.path.isdir(path):
+            if os.path.exists(os.path.join(path, "__init__.py")):
+                print "Reading", path
+                trees.append(
+                    Package(module_name,
+                            find_modules(glob.glob(os.path.join(path, "*.py")))))
+        else:
+            print "Reading", path
+            source = open(path, "rb").read()
+            objects = [ast.parse(source, path)]
+            trees.append(Module(module_name, objects))
     
-    for path, (module_name, objects) in zip(paths, trees):
+    return trees
+
+def process(paths):
+
+    # Compile an index of words to help with cross-referencing.
+    index = Index()
+    trees = find_modules(paths)
     
-        output_path = module_name + ".html"
-        print "Writing", output_path
-        
-        w = Writer(open(output_path, "wb"), module_name, index)
-        w.write(objects)
-        w.close()
+    for obj in trees:
+        index.read(obj)
+    
+    writer = Writer(index)
+    
+    for obj in trees:
+        writer.write(obj)
 
 if __name__ == "__main__":
 
