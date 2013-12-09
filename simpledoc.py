@@ -298,7 +298,19 @@ class Writer:
     
     def write_module(self, module):
     
-        if not self.is_documented(module.objects[0]):
+        if self.context:
+            parent = self.context[-1]
+        else:
+            parent = None
+        
+        # Return if the matched object belonging to the parent of this module
+        # is not the same as the module object itself, or if no suitable object
+        # could be found.
+        try:
+            match = self.index.refs[module.name][parent][-1]
+            if match != module.objects[0]:
+                return
+        except KeyError:
             return
         
         name = ".".join(map(lambda x: x.name, self.context + [module]))
