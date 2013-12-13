@@ -65,6 +65,9 @@ class Index:
     
     def read(self, obj):
     
+        """Reads the Module or Package object specified by obj, calling the
+        appropriate method to handle it."""
+        
         if isinstance(obj, Module):
             self.read_module(obj)
         elif isinstance(obj, Package):
@@ -72,11 +75,15 @@ class Index:
     
     def read_module(self, module):
     
+        """Reads and processes the specified module and its contents."""
+        
         self.name = module.name
         self.process(module.objects)
     
     def read_package(self, package):
     
+        """Reads and processes the specified package and its contents."""
+        
         # Append the Package object to the context because this has a name
         # attribute that various methods need.
         self.context.append(package)
@@ -156,13 +163,20 @@ class Writer:
         "<title>%(title)s</title>\n"
         '<style type="text/css">\n'
         "  .doc { text-align: justify }\n"
-        "  .class { border-left: solid 4px #d0d0ff;\n"
+        "  .class { border-left: solid 4px #c0e0ff;\n"
         "           background-color: #f7f7f7;\n"
-        "           padding-left: 0.5em }\n"
-        "  .class-heading { background-color: #d0e0ff; padding: 2px }\n"
-        "  .function { border-left: solid 4px #d0dfff;\n"
-        "              padding-left: 0.5em }\n"
-        "  .function-heading { font-family: monospace }\n"
+        "           padding-left: 8px }\n"
+        "  .class-heading { background-color: #c0e0ff;\n"
+        "                   padding: 2px;\n"
+        "                   padding-left: 0.25em;\n"
+        "                   margin-left: -8px }\n"
+        "  .function { border-left: solid 4px #d0e0f0;\n"
+        "              padding-left: 8px }\n"
+        "  .function-heading { font-family: monospace;\n"
+        "                      background-color: #d0e0f0;\n"
+        "                      padding: 2px;\n"
+        "                      padding-left: 0.25em;\n"
+        "                      margin-left: -8px }\n"
         "</style>\n"
         '<meta http-equiv="Content-Type" content="text/html; charset=%(encoding)s" />\n'
         "</head>\n\n"
