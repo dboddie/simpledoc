@@ -164,19 +164,28 @@ class Writer:
         '<style type="text/css">\n'
         "  .doc { text-align: justify }\n"
         "  .class { border-left: solid 4px #c0e0ff;\n"
+        "           border-right: solid 4px #c0e0ff;\n"
+        "           border-bottom: solid 4px #c0e0ff;\n"
         "           background-color: #f7f7f7;\n"
-        "           padding-left: 8px }\n"
+        "           padding-left: 8px;\n"
+        "           padding-right: 8px;\n"
+        "           padding-bottom: 8px }\n"
         "  .class-heading { background-color: #c0e0ff;\n"
         "                   padding: 2px;\n"
         "                   padding-left: 0.25em;\n"
-        "                   margin-left: -8px }\n"
+        "                   margin-left: -8px;\n"
+        "                   margin-right: -8px }\n"
         "  .function { border-left: solid 4px #d0e0f0;\n"
-        "              padding-left: 8px }\n"
+        "              border-right: solid 4px #d0e0f0;\n"
+        "              border-bottom: solid 4px #d0e0f0;\n"
+        "              padding-left: 8px;\n"
+        "              padding-right: 8px }\n"
         "  .function-heading { font-family: monospace;\n"
         "                      background-color: #d0e0f0;\n"
         "                      padding: 2px;\n"
         "                      padding-left: 0.25em;\n"
-        "                      margin-left: -8px }\n"
+        "                      margin-left: -8px;\n"
+        "                      margin-right: -8px }\n"
         "</style>\n"
         '<meta http-equiv="Content-Type" content="text/html; charset=%(encoding)s" />\n'
         "</head>\n\n"
@@ -588,15 +597,19 @@ def find_modules(paths):
 
 def process(paths):
 
-    # Compile an index of words to help with cross-referencing.
+    # Compile an index of words to help with cross-referencing and parse the
+    # modules found on each of the supplied paths.
     index = Index()
     trees = find_modules(paths)
     
+    # Read the files, adding objects that can be referenced to the index.
     for obj in trees:
         index.read(obj)
     
+    # Create a writer that uses the index for cross-referencing.
     writer = Writer(index)
     
+    # Use the writer to create documentation for each of the modules found.
     for obj in trees:
         writer.write(obj)
 
