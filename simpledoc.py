@@ -336,7 +336,7 @@ class Writer:
         except KeyError:
             return
         
-        name = ".".join(map(lambda x: x.name, self.context + [module]))
+        name = ".".join(filter(lambda y: y != "", map(lambda x: x.name, self.context + [module])))
         self.open(name)
         self.write_objects(module.objects)
         self.close()
