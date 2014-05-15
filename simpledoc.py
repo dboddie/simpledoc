@@ -191,9 +191,10 @@ class Writer:
         "</head>\n\n"
         )
     
-    def __init__(self, index, encoding = "utf8"):
+    def __init__(self, index, output_dir, encoding = "utf8"):
     
         self.index = index
+        self.output_dir = output_dir
         self.encoding = encoding
         
         # Keep track of which HTML elements have been started.
@@ -206,7 +207,7 @@ class Writer:
     def open(self, name):
     
         self.name = name
-        output_path = name + ".html"
+        output_path = os.path.join(self.output_dir, name + ".html")
         print "Writing", output_path
         self.f = open(output_path, "wb")
         
@@ -605,7 +606,7 @@ def find_modules(paths):
     
     return trees
 
-def process(paths):
+def process(paths, output_dir):
 
     # Compile an index of words to help with cross-referencing and parse the
     # modules found on each of the supplied paths.
@@ -617,18 +618,39 @@ def process(paths):
         index.read(obj)
     
     # Create a writer that uses the index for cross-referencing.
-    writer = Writer(index)
+    writer = Writer(index, output_dir)
     
     # Use the writer to create documentation for each of the modules found.
     for obj in trees:
         writer.write(obj)
 
+
+def usage():
+
+    sys.stderr.write("Usage: %s [-o <output directory>] <Python module file or package directory> ...\n" % sys.argv[0])
+    sys.exit(1)
+
 if __name__ == "__main__":
 
-    if len(sys.argv) < 2:
-        sys.stderr.write("Usage: %s <Python module file or package directory> ...\n" % sys.argv[0])
+    try:
+        at = sys.argv.index("-o")
+        output_dir = sys.argv[at + 1]
+        inputs = sys.argv[at + 2:]
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+
+    except ValueError:
+        output_dir = os.path.abspath(os.curdir)
+        inputs = sys.argv[1:]
+    except IndexError:
+        usage()
+    except OSError:
+        sys.stderr.write("Failed to create the output directory: %s\n" % output_dir)
         sys.exit(1)
     
-    process(sys.argv[1:])
+    if not inputs:
+        usage()
+    
+    process(inputs, output_dir)
     
     sys.exit()
