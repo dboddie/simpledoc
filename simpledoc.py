@@ -562,15 +562,25 @@ class Writer:
     def handleAttribute(self, obj):
     
         self.write_objects([obj.value])
+
+    def handleCall(self, obj):
     
-    Handlers = {ast.Module: handleModule,
-                ast.Import: handleImport,
+        # Currently only writes the representation of the callable itself
+        # and any non-keyword arguments.
+        self.write_objects([obj.func])
+        self.w("(")
+        self.write_objects(obj.args)
+        self.w(")")
+    
+    Handlers = {ast.Attribute: handleAttribute,
+                ast.Call: handleCall,   # Call is found in default arguments
                 ast.ClassDef: handleClassDef,
                 ast.FunctionDef: handleFunctionDef,
-                ast.Num: handleNum,
-                ast.Str: handleStr,
+                ast.Import: handleImport,
+                ast.Module: handleModule,
                 ast.Name: handleName,
-                ast.Attribute: handleAttribute}
+                ast.Num: handleNum,
+                ast.Str: handleStr}
 
 def find_modules(paths):
 
