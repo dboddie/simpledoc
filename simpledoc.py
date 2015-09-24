@@ -373,16 +373,27 @@ class Writer:
             
             for line in lines:
                 if line:
-                    para.append(line)
+                    l = line.lstrip()
+                    para.append((len(line) - len(l), line))
                 else:
-                    paragraphs.append(" ".join(para))
+                    # Record the minimum indentation level with the text.
+                    indent, para = zip(*para)
+                    paragraphs.append((min(indent), "\n".join(para)))
                     para = []
             
             if para:
-                paragraphs.append(" ".join(para))
+                indent, para = zip(*para)
+                paragraphs.append((min(indent), "\n".join(para)))
             
-            for para in paragraphs:
+            for indent, para in paragraphs:
             
+                # Treat indented text as preformatted text.
+                if indent > 0:
+                    self.begin('pre', spacing = "\n")
+                    self.w(para)
+                    self.end("pre", spacing = "\n\n")
+                    continue
+
                 self.begin('p', attributes = {"class": "doc"}, spacing = "\n")
                 
                 words = para.split()
