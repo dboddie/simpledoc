@@ -619,6 +619,11 @@ def find_modules(paths):
 
 def process(paths, output_dir):
 
+    """Processes the modules found on each path in list of paths given,
+    writing the documentation to suitably named files in the directory
+    specified by output_dir.
+    """
+    
     # Compile an index of words to help with cross-referencing and parse the
     # modules found on each of the supplied paths.
     index = Index()
